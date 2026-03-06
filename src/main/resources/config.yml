@@ -1,0 +1,47 @@
+# vUnstable Configuration v1.1.1
+
+# Auto-optimize spigot.yml max-tnt-per-tick for Nuke Rod
+# WARNING: Requires server restart to take effect after change
+auto-optimize-spigot: true
+
+nuke:
+  total-tnt: 2000
+  rings: 10
+  min-radius: 5
+  max-radius: 50
+  spawn-height: 67
+  velocity-y: -3.0
+  spawn-rate-per-tick: 200
+  auto-detonate-on-ground: true
+  fuse-ticks: 9999
+  final-fuse-ticks: 0
+  # Synchronized explosion settings
+  # When enabled, all rings explode simultaneously for maximum crater effect
+  sync-explosions: true
+  base-delay-ticks: 20  # Buffer ticks before synchronized explosion
+
+stab:
+  depth: 100
+  velocity: -10.0
+  fuse-ticks: 10  # 0.5 seconds (10 ticks). Lower = faster shaft bore
+  spawn-mode: INSTANT  # Options: INSTANT (teleport) or FALL (traditional fall)
+  teleport-effect: true  # Visual effect for INSTANT mode
+
+performance:
+  async-spawning: true
+  particles-enabled: false
+  max-tnt-per-tick: 200
+
+# Block drops control
+# If true: TNT explosions destroy blocks but drop no items (reduces lag)
+# If false: Vanilla block drops enabled
+remove-block-drops: true
+
+# Error reporting to developer Discord
+# If true: Anonymous error reports are sent to help fix bugs (default)
+# If false: Errors are only saved to local files
+Error-Log: true
+
+messages:
+  prefix: "&7[&cvUnstable&7] "
+  console-only: true

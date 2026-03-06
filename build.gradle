@@ -1,0 +1,52 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '8.3.6'
+}
+
+group = 'com.vprolabs'
+version = '1.1.1'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    // Paper API only - no ProtocolLib needed
+    compileOnly 'io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT'
+    
+    // Gson for JSON parsing (Modrinth API)
+    implementation 'com.google.code.gson:gson:2.11.0'
+}
+
+// Use Java 21 for Paper 1.21.x
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// Compiler options
+tasks.withType(JavaCompile) {
+    options.release = 21
+}
+
+// Shadow plugin configuration
+shadowJar {
+    archiveClassifier.set('')
+}
+
+// Build shadowJar by default
+tasks.build.dependsOn tasks.shadowJar
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
