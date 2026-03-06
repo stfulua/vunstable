@@ -1,0 +1,34 @@
+name: vUnstable
+version: ${version}
+main: com.vprolabs.vunstable.vUnstable
+api-version: '1.21'
+author: vProLabs
+website: https://vprolabs.xyz
+
+softdepend: []
+
+commands:
+  vunstable:
+    description: vUnstable main command
+    usage: /vu <give|update|errors|debug|status|reload>
+    aliases: [vu]
+    permission: vunstable.use
+    permission-message: "&cYou don't have permission!"
+  rod:
+    description: Alias for vunstable
+    usage: /vu <give|update|errors|debug|status|reload>
+    permission: vunstable.use
+
+permissions:
+  vunstable.give:
+    description: Allows giving rods to self
+    default: op
+  vunstable.give.others:
+    description: Allows giving rods to other players
+    default: op
+  vunstable.reload:
+    description: Allows reloading config
+    default: op
+  vunstable.admin:
+    description: Allows viewing optimization status and receiving join notifications
+    default: op
