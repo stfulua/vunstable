@@ -2,7 +2,6 @@ package com.vprolabs.vunstable.command;
 
 import com.vprolabs.vunstable.config.SpigotOptimizer;
 import com.vprolabs.vunstable.rod.RodManager;
-import com.vprolabs.vunstable.util.ErrorHandler;
 import com.vprolabs.vunstable.util.UpdateChecker;
 import com.vprolabs.vunstable.vUnstable;
 import net.kyori.adventure.text.Component;
@@ -18,8 +17,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -84,10 +87,6 @@ public class RodCommand implements TabExecutor {
                 return handleStatus(sender);
             case "update":
                 return handleUpdate(sender);
-            case "debug":
-                return handleDebug(sender);
-            case "errors":
-                return handleErrors(sender);
             default:
                 sendError(sender, "Unknown command. Usage: /vu give <nuke|stab> [player]");
                 return true;
@@ -382,70 +381,6 @@ public class RodCommand implements TabExecutor {
         return true;
     }
     
-    private boolean handleDebug(CommandSender sender) {
-        if (!sender.hasPermission(PERMISSION_ADMIN)) {
-            sendError(sender, "Insufficient permissions");
-            return true;
-        }
-        
-        sendSuccess(sender, "Generating test error... Check Discord and console");
-        
-        ErrorHandler errorHandler = ErrorHandler.getInstance();
-        if (errorHandler != null) {
-            errorHandler.generateTestError();
-        } else {
-            sendError(sender, "ErrorHandler not initialized");
-        }
-        
-        return true;
-    }
-    
-    private boolean handleErrors(CommandSender sender) {
-        if (!sender.hasPermission(PERMISSION_ADMIN)) {
-            sendError(sender, "Insufficient permissions");
-            return true;
-        }
-        
-        ErrorHandler errorHandler = ErrorHandler.getInstance();
-        if (errorHandler == null) {
-            sendError(sender, "ErrorHandler not initialized");
-            return true;
-        }
-        
-        int errorCount = errorHandler.getErrorCount();
-        
-        sender.sendMessage(Component.text("========== vUnstable Errors ==========")
-            .color(NamedTextColor.GOLD)
-            .decorate(TextDecoration.BOLD));
-        
-        sender.sendMessage(Component.text("Errors this session: ")
-            .color(NamedTextColor.GRAY)
-            .append(Component.text(String.valueOf(errorCount))
-                .color(errorCount > 0 ? NamedTextColor.RED : NamedTextColor.GREEN)));
-        
-        // Show recent error files
-        File[] recentErrors = errorHandler.getRecentErrors(5);
-        if (recentErrors.length > 0) {
-            sender.sendMessage(Component.text("Recent error files:")
-                .color(NamedTextColor.GRAY));
-            
-            for (File file : recentErrors) {
-                sender.sendMessage(Component.text("  - ")
-                    .color(NamedTextColor.GRAY)
-                    .append(Component.text(file.getName())
-                        .color(NamedTextColor.YELLOW)));
-            }
-        } else {
-            sender.sendMessage(Component.text("No error files found.")
-                .color(NamedTextColor.GREEN));
-        }
-        
-        sender.sendMessage(Component.text("=====================================")
-            .color(NamedTextColor.GOLD));
-        
-        return true;
-    }
-    
     // ==================== MESSAGE HELPERS ====================
     
     private void sendError(CommandSender sender, String message) {
@@ -463,11 +398,6 @@ public class RodCommand implements TabExecutor {
             .color(net.kyori.adventure.text.format.NamedTextColor.YELLOW));
     }
     
-    private void sendUsage(CommandSender sender) {
-        sender.sendMessage(Component.text("[vUnstable] Usage: /vu give <nuke|stab> [player]")
-            .color(net.kyori.adventure.text.format.NamedTextColor.RED));
-    }
-    
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(Component.text("========== vUnstable v" + plugin.getDescription().getVersion() + " ==========")
             .color(NamedTextColor.GOLD)
@@ -476,10 +406,6 @@ public class RodCommand implements TabExecutor {
             .append(Component.text(" - Give destruction rods").color(NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/vu update").color(NamedTextColor.YELLOW)
             .append(Component.text(" - Check for plugin updates").color(NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/vu errors").color(NamedTextColor.YELLOW)
-            .append(Component.text(" - View error count and files").color(NamedTextColor.GRAY)));
-        sender.sendMessage(Component.text("/vu debug").color(NamedTextColor.YELLOW)
-            .append(Component.text(" - Test error reporting").color(NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/vu status").color(NamedTextColor.YELLOW)
             .append(Component.text(" - Check optimization status").color(NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("/vu reload").color(NamedTextColor.YELLOW)
@@ -511,12 +437,6 @@ public class RodCommand implements TabExecutor {
             }
             if ("update".startsWith(partial) && sender.hasPermission(PERMISSION_ADMIN)) {
                 completions.add("update");
-            }
-            if ("debug".startsWith(partial) && sender.hasPermission(PERMISSION_ADMIN)) {
-                completions.add("debug");
-            }
-            if ("errors".startsWith(partial) && sender.hasPermission(PERMISSION_ADMIN)) {
-                completions.add("errors");
             }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
             String partial = args[1].toLowerCase();

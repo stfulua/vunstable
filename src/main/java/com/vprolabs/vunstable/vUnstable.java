@@ -4,17 +4,19 @@ import com.vprolabs.vunstable.command.RodCommand;
 import com.vprolabs.vunstable.config.ConfigManager;
 import com.vprolabs.vunstable.config.SpigotOptimizer;
 import com.vprolabs.vunstable.engine.AsyncSpawnEngine;
+import com.vprolabs.vunstable.listener.AdminErrorNotifier;
 import com.vprolabs.vunstable.listener.AdminNotifier;
 import com.vprolabs.vunstable.listener.EntityListener;
 import com.vprolabs.vunstable.listener.PlayerListener;
 import com.vprolabs.vunstable.listener.UpdateListener;
 import com.vprolabs.vunstable.rod.RodManager;
 import com.vprolabs.vunstable.util.ErrorHandler;
+import com.vprolabs.vunstable.util.SystemInfoLogger;
 import com.vprolabs.vunstable.util.UpdateChecker;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * vUnstable v1.1.1 - The Ultimate Orbital Strike Cannon
+ * vUnstable v1.1.2 - The Ultimate Orbital Strike Cannon
  * 
  * Features:
  * - Async spawning engine
@@ -27,7 +29,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  * - Configurable block drops
  * 
  * @author vProLabs
- * @version 1.1.1
+ * @version 1.1.2
  */
 public class vUnstable extends JavaPlugin {
     
@@ -40,6 +42,8 @@ public class vUnstable extends JavaPlugin {
     private UpdateChecker updateChecker;
     private UpdateListener updateListener;
     private ErrorHandler errorHandler;
+    private AdminErrorNotifier adminErrorNotifier;
+    private SystemInfoLogger systemInfoLogger;
     private static SpigotOptimizer.SpawnParameters nukeParams;
     
     @Override
@@ -60,6 +64,10 @@ public class vUnstable extends JavaPlugin {
         
         // Initialize ErrorHandler (after ConfigManager)
         this.errorHandler = new ErrorHandler(this);
+        
+        // Generate system info log
+        this.systemInfoLogger = new SystemInfoLogger(this);
+        systemInfoLogger.generate();
         
         // Initialize SpigotOptimizer and run optimization check
         this.optimizer = new SpigotOptimizer(this);
@@ -106,6 +114,10 @@ public class vUnstable extends JavaPlugin {
         this.updateListener = new UpdateListener(this, updateChecker);
         getServer().getPluginManager().registerEvents(updateListener, this);
         
+        // Register admin error notifier for error notifications
+        this.adminErrorNotifier = new AdminErrorNotifier(this);
+        getServer().getPluginManager().registerEvents(adminErrorNotifier, this);
+        
         // Register commands
         RodCommand rodCommand = new RodCommand(this);
         
@@ -125,7 +137,7 @@ public class vUnstable extends JavaPlugin {
             getLogger().warning("[vUnstable] Command 'rod' not registered (alias may be handled by 'vunstable')");
         }
         
-        getLogger().info("vUnstable v1.1.1 enabled");
+        getLogger().info("vUnstable v1.1.2 enabled");
     }
     
     @Override
@@ -133,7 +145,7 @@ public class vUnstable extends JavaPlugin {
         if (spawnEngine != null) {
             spawnEngine.shutdown();
         }
-        getLogger().info("vUnstable v1.1.1 disabled");
+        getLogger().info("vUnstable v1.1.2 disabled");
     }
     
     public static vUnstable getInstance() {

@@ -1,5 +1,5 @@
 name: vUnstable
-version: ${version}
+version: '1.1.2'
 main: com.vprolabs.vunstable.vUnstable
 api-version: '1.21'
 author: vProLabs
@@ -10,13 +10,13 @@ softdepend: []
 commands:
   vunstable:
     description: vUnstable main command
-    usage: /vu <give|update|errors|debug|status|reload>
+    usage: /vu <give|update|status|reload>
     aliases: [vu]
     permission: vunstable.use
     permission-message: "&cYou don't have permission!"
   rod:
     description: Alias for vunstable
-    usage: /vu <give|update|errors|debug|status|reload>
+    usage: /vu <give|update|status|reload>
     permission: vunstable.use
 
 permissions:
@@ -30,5 +30,5 @@ permissions:
     description: Allows reloading config
     default: op
   vunstable.admin:
-    description: Allows viewing optimization status and receiving join notifications
+    description: Allows viewing optimization status and receiving error notifications on join
     default: op

@@ -1,4 +1,4 @@
-# vUnstable Configuration v1.1.1
+# vUnstable Configuration v1.1.2
 
 # Auto-optimize spigot.yml max-tnt-per-tick for Nuke Rod
 # WARNING: Requires server restart to take effect after change
@@ -36,11 +36,6 @@ performance:
 # If true: TNT explosions destroy blocks but drop no items (reduces lag)
 # If false: Vanilla block drops enabled
 remove-block-drops: true
-
-# Error reporting to developer Discord
-# If true: Anonymous error reports are sent to help fix bugs (default)
-# If false: Errors are only saved to local files
-Error-Log: true
 
 messages:
   prefix: "&7[&cvUnstable&7] "

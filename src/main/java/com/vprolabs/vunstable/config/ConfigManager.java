@@ -1,6 +1,6 @@
 package com.vprolabs.vunstable.config;
 
-import com.vprolabs.vunstable.util.ErrorHandler;
+
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -42,7 +42,6 @@ public class ConfigManager {
     private int maxTntPerTick;
     private boolean autoOptimizeSpigot;
     private boolean removeBlockDrops;
-    private boolean errorLogEnabled;
     
     public ConfigManager(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -87,16 +86,8 @@ public class ConfigManager {
             this.autoOptimizeSpigot = config.getBoolean("auto-optimize-spigot", true);
             this.removeBlockDrops = config.getBoolean("remove-block-drops", true);
             
-            // Load error reporting config (simple boolean toggle)
-            this.errorLogEnabled = config.getBoolean("Error-Log", true);
-            
         } catch (Exception e) {
             plugin.getLogger().severe("[vUnstable] Failed to reload config: " + e.getMessage());
-            // Try to use ErrorHandler if available
-            if (instance != null && ErrorHandler.getInstance() != null) {
-                ErrorHandler.getInstance().handle(e, "ConfigManager.reload()", 
-                    "ConfigManager", "reload", 51, null, null, "Config reload failed");
-            }
         }
     }
     
@@ -127,12 +118,6 @@ public class ConfigManager {
     public int getMaxTntPerTick() { return maxTntPerTick; }
     public boolean isAutoOptimizeSpigot() { return autoOptimizeSpigot; }
     public boolean shouldRemoveBlockDrops() { return removeBlockDrops; }
-    
-    /**
-     * Check if error logging to developer Discord is enabled.
-     * Users can only toggle this on/off, never change the webhook URL.
-     */
-    public boolean isErrorLogEnabled() { return errorLogEnabled; }
     
     public boolean isConsoleOnly() {
         return config.getBoolean("messages.console-only", true);
