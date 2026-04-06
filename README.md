@@ -6,16 +6,23 @@
 
 ---
 
+### TO-DO (in the future)
+- 26.1 Support
+- Add Fabric Support
+- Add Forge/NeoForge Support
+> These will be made in the future of this plugin, if you wanna support us to add these features faster then join our discord!
+
+---
+
 ## ✨ What's New in v1.2.0
 
 ### 🚀 Folia Support
 - **Full Folia Compatibility**: Complete support for Folia's regionized threading model
 - **Cross-Platform Scheduler**: Unified `TaskScheduler` abstraction works on both Bukkit and Folia
-- **Ground-Based Sync**: TNT waits for ALL entities to land before synchronized explosion (both platforms)
-- **4-Second Failsafe**: Global timeout from spawn ensures explosions happen even if TNT glitches
+- **4-Second Failsafe**: Global timeout from spawn ensures explosions happen even if TNT glitches [Updated already existing]
 
 ### 📋 Nuke Queue System
-- **Fire Multiple Nukes**: Queue up to 3 nukes while one is active
+- **Fire Multiple Nukes**: Queue up to multiple nukes while one is active (Queue is Very smooth)
 - **FIFO Processing**: First-in-first-out queue for fair execution
 - **Silent Operation**: No player chat spam, console-only logging
 - **Configurable**: Adjust `max-concurrent` and `queue-size` in config
@@ -23,14 +30,13 @@
 ### 🔄 Modrinth Auto-Updater
 - **Automatic Checks**: Scans for updates every 2 hours
 - **Admin Notifications**: Online admins get notified with clickable download links
-- **Console Alerts**: Server console shows update availability
-- **Manual Check**: `/vu update` command for on-demand checks
+- **Console Alerts**: Server console shows update availability [Updated]
+- **Manual Check**: `/vu update` command for on-demand checks [New]
 
 ### 💥 Improved Synchronized Explosions
-- **Smart Ground Detection**: All TNT freeze on ground contact
-- **Instant Detonation**: When last TNT lands, all explode simultaneously
-- **Summary Messages**: Single clean log showing landed vs failsafe counts
-- **No Spam**: Eliminated per-TNT debug output
+- **Smart Ground Detection**: All TNT freeze on ground contact [Updated]
+- **Instant Detonation**: When last TNT lands, all explode simultaneously [Updated]
+- **Summary Messages**: Single clean log showing landed vs failsafe counts [New]
 
 ---
 
@@ -159,7 +165,7 @@ remove-block-drops: true   # Prevent item lag from explosions
 - ☕ Support: https://ko-fi.com/v4bi 
 - 💬 Discord: https://discord.gg/SNzUYWbc5Q 
 - 📦 Modrinth: https://modrinth.com/project/dhEhlFIx
-- 📂 GitHub: https://github.com/vprolabs/vunstable
+- 📂 GitHub: https://github.com/stfulua/vunstable
 
 ---
 

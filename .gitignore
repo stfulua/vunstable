@@ -33,3 +33,4 @@ plugins/
 
 # Don't ignore the built JAR in build/libs for releases
 !build/libs/vUnstable-*.jar
+CHANGELOG.md
