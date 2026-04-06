@@ -169,5 +169,19 @@ remove-block-drops: true   # Prevent item lag from explosions
 
 ---
 
+## 📄 License
+
+This project is licensed under the **vProLabs General License**.
+
+- **Non-Commercial Use**: Free for personal and non-commercial use
+- **Attribution Required**: Credit vProLabs and link to the original project
+- **Share Alike**: Derivative works must use the same license
+- **No Competing Works**: Derivatives cannot compete with or disparage the original
+- **Commercial Licensing**: Contact vProLabs for commercial use rights
+
+See [LICENSE](LICENSE) for full terms.
+
+---
+
 **Version**: 1.2.0  
 **Made with 🔥 by vProLabs Team**
