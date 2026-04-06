@@ -1,17 +1,22 @@
-# vUnstable Configuration v1.1.2
+# vUnstable Configuration v1.2.0
 
 # Auto-optimize spigot.yml max-tnt-per-tick for Nuke Rod
 # WARNING: Requires server restart to take effect after change
 auto-optimize-spigot: true
 
 nuke:
-  total-tnt: 2000
+  # Platform-specific defaults (auto-detected):
+  # - Folia: 1000 TNT, 50/tick spawn rate (regionized threading optimization)
+  # - Bukkit/Spigot/Paper/Purpur: 2000 TNT, 200/tick spawn rate
+  # You can override these values below if needed.
+  
+  total-tnt: 2000  # Default for Bukkit. Folia auto-reduces to 1000
   rings: 10
   min-radius: 5
   max-radius: 50
   spawn-height: 67
   velocity-y: -3.0
-  spawn-rate-per-tick: 200
+  spawn-rate-per-tick: 200  # Default for Bukkit. Folia auto-reduces to 50
   auto-detonate-on-ground: true
   fuse-ticks: 9999
   final-fuse-ticks: 0
@@ -19,6 +24,16 @@ nuke:
   # When enabled, all rings explode simultaneously for maximum crater effect
   sync-explosions: true
   base-delay-ticks: 20  # Buffer ticks before synchronized explosion
+  
+  # Queue system - allows multiple nukes to be queued when one is active
+  # max-concurrent: How many nukes can run at the same time (default: 1)
+  # queue-size: How many nukes can wait in queue (default: 3, 0 = disable queue)
+  max-concurrent: 1
+  queue-size: 3
+  
+  # Rod customization
+  rod-name: "Nuke"  # Custom name shown on the item
+  rod-enchanted: true  # Add enchantment glow (true/false)
 
 stab:
   depth: 100
@@ -26,6 +41,10 @@ stab:
   fuse-ticks: 10  # 0.5 seconds (10 ticks). Lower = faster shaft bore
   spawn-mode: INSTANT  # Options: INSTANT (teleport) or FALL (traditional fall)
   teleport-effect: true  # Visual effect for INSTANT mode
+  
+  # Rod customization
+  rod-name: "Stab"  # Custom name shown on the item
+  rod-enchanted: true  # Add enchantment glow (true/false)
 
 performance:
   async-spawning: true

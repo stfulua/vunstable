@@ -7,17 +7,18 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import com.vprolabs.vunstable.vUnstable;
 
 import java.util.List;
 
 /**
  * AdminErrorNotifier - Notifies admins of errors when they join.
  * 
- * v1.1.2: Notifies admins with vunstable.admin permission about recent errors.
+ * v1.2.0: Notifies admins with vunstable.admin permission about recent errors.
  */
 public class AdminErrorNotifier implements Listener {
     
@@ -46,7 +47,7 @@ public class AdminErrorNotifier implements Listener {
         int errorCount = errors.size();
         
         // Send notification after a short delay to ensure player is fully joined
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        vUnstable.getInstance().getSchedulerManager().runTaskLater(() -> {
             if (!player.isOnline()) return;
             
             // Header
@@ -77,7 +78,7 @@ public class AdminErrorNotifier implements Listener {
                 .append(Component.text("Need help? Contact us: ").color(NamedTextColor.GRAY))
                 .append(Component.text("discord.gg/SNzUYWbc5Q")
                     .color(NamedTextColor.AQUA)
-                    .decorate(TextDecoration.UNDERLINE)
+                    .decorate(TextDecoration.UNDERLINED)
                     .clickEvent(ClickEvent.openUrl("https://discord.gg/SNzUYWbc5Q"))
                     .hoverEvent(HoverEvent.showText(Component.text("Click to join our Discord").color(NamedTextColor.GRAY))));
             

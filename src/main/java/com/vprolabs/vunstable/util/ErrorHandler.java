@@ -12,7 +12,7 @@ import java.util.logging.Level;
 /**
  * ErrorHandler - Simple error logging to console.
  * 
- * v1.1.2: Removed external reporting. Errors are logged to console only.
+ * v1.2.0: Removed external reporting. Errors are logged to console only.
  * If issues occur, please contact us at: discord.gg/SNzUYWbc5Q
  */
 public class ErrorHandler {

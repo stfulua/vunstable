@@ -1,65 +1,61 @@
-vUnstable Source Available License
+vProLabs General License
 
-Copyright (c) 2025-2026 vProLabs (stfulua)
-
-TERMS AND CONDITIONS FOR USE, VIEWING, AND REFERENCE
+Copyright (c) 2026 vProLabs (https://vprolabs.xyz)
 
 1. DEFINITIONS
+   - "Original Author(s)": The creator(s) of vProLabs, including but not limited to
+     the entity operating under the name vProLabs and its authorized representatives.
+   - "Software": All code, documentation, assets, and materials distributed under
+     this license.
+   - "Derivative Work": Any modification, adaptation, translation, or creation based
+     upon the Software, including but not limited to forks, remakes, ports, plugins,
+     addons, or any work that incorporates substantial portions of the Software.
 
-   "Software" refers to the vUnstable plugin source code, documentation, and all
-   associated files contained in this repository.
+2. GRANT OF RIGHTS TO ORIGINAL AUTHORS
+   The Original Author(s) retain all rights to the Software, including but not limited
+   to the exclusive right to:
+   - Use, modify, distribute, and sublicense the Software in any manner;
+   - Monetize, sell, or commercially exploit the Software;
+   - Create and monetize derivative works based on the Software;
+   - License the Software under different terms to third parties.
 
-   "Author" refers to vProLabs, the original creator and copyright holder.
+3. GRANT OF RIGHTS TO USERS (NON-COMMERCIAL)
+   Permission is hereby granted, free of charge, to any person obtaining a copy of
+   this Software, to use, copy, modify, and distribute the Software subject to the
+   following conditions:
 
-   "Commercial Use" refers to any use of the Software for monetary gain, including
-   but not limited to: selling the Software, using it in paid services, or
-   incorporating it into commercial products.
+   a) ATTRIBUTION: You must give appropriate credit to vProLabs, provide a link to
+      the original project, and indicate if changes were made. You may do so in any
+      reasonable manner, but not in any way that suggests vProLabs endorses you or
+      your use.
 
-   "Derivative Work" refers to any modification, adaptation, translation, or
-   transformation of the Software, including ports to other platforms or languages.
+   b) NON-COMMERCIAL USE: This Software may not be used for commercial purposes.
+      You may not sell, monetize, or otherwise commercially exploit this Software
+      or any derivative works you create based upon it.
 
-2. PERMITTED ACTIVITIES
+   c) SHARE ALIKE: If you remix, transform, or build upon the Software, you must
+      distribute your contributions under the same license terms as this license.
 
-   Subject to the conditions stated herein, you are granted a limited, non-exclusive,
-   non-transferable right to:
+   d) NO COMPETING WORKS: You may not create derivative works that:
+      - Compete with the original Software in the marketplace;
+      - Are designed to disparage, damage, or undermine the reputation of the
+        original Software or its Original Author(s);
+      - Mislead users into believing they are the original Software.
 
-   a) View and read the source code for educational and inspirational purposes;
-   b) Use the compiled Software on your own private Minecraft server;
-   c) Report bugs, request features, and provide feedback to the Author;
-   d) Share links to this official repository;
-   e) Discuss the Software in public forums, with proper attribution.
+4. DERIVATIVE WORKS RESTRICTIONS
+   Any Derivative Work created by a party other than the Original Author(s):
+   - Is STRICTLY PROHIBITED from any form of monetization;
+   - May not be sold, licensed for profit, or used to generate revenue;
+   - May not be distributed through commercial channels or marketplaces;
+   - Must prominently display that it is unofficial and not affiliated with vProLabs;
+   - Must comply with all terms of this license, including the Non-Commercial clause.
 
-3. PROHIBITED ACTIVITIES
+5. COMMERCIAL LICENSING
+   For commercial use rights, including the right to monetize derivative works,
+   contact the Original Author(s) at the project repository or official website.
+   Commercial licensing is granted solely at the discretion of vProLabs.
 
-   The following activities are expressly prohibited without prior written
-   permission from the Author:
-
-   a) Copying, cloning, or reproducing the Software, in whole or in part;
-   b) Creating Derivative Works based on the Software;
-   c) Distributing, redistributing, or sharing the source code;
-   d) Using the Software for Commercial Use;
-   e) Removing or altering copyright notices, license terms, or author attribution;
-   f) Claiming authorship or ownership of the Software;
-   g) Using code from this Software in other projects;
-   h) Reverse engineering the compiled binaries for purposes beyond personal use.
-
-4. PRIVATE USE EXCEPTION
-
-   Installation and use of the compiled Software on a private Minecraft server
-   for non-commercial purposes is permitted, provided that:
-
-   a) No payment is required for access to the server or its features;
-   b) The Software is not modified or redistributed;
-   c) All copyright notices remain intact.
-
-5. INTELLECTUAL PROPERTY
-
-   The Software and all associated intellectual property rights remain the
-   exclusive property of the Author. No license or right is granted except as
-   expressly stated herein. All rights not expressly granted are reserved.
-
-6. DISCLAIMER OF WARRANTY
-
+6. NO WARRANTY
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -69,24 +65,14 @@ TERMS AND CONDITIONS FOR USE, VIEWING, AND REFERENCE
    SOFTWARE.
 
 7. TERMINATION
+   This license automatically terminates if you fail to comply with any of its terms.
+   Upon termination, you must cease all use and distribution of the Software and
+   any derivative works.
 
-   This license automatically terminates if you violate any of its terms.
-   Upon termination, you must cease all use of the Software and destroy all
-   copies in your possession.
-
-8. GOVERNING LAW
-
-   This license shall be governed by and construed in accordance with applicable
-   copyright laws, without regard to conflict of law principles.
-
-9. CONTACT
-
-   For licensing inquiries, permissions, or questions regarding this license,
-   please contact:
-
-   Discord: https://discord.gg/SNzUYWbc5Q
-
----
-
-By viewing, accessing, or using this Software, you acknowledge that you have
-read, understood, and agree to be bound by the terms of this license.
+8. MISCELLANEOUS
+   - You may not claim authorship of the original work;
+   - You may not remove or alter copyright notices;
+   - You may not use this Software for malicious purposes;
+   - You may not redistribute without proper attribution;
+   - This license does not grant permission to use trade names, trademarks,
+     service marks, or product names of vProLabs.

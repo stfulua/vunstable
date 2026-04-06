@@ -13,7 +13,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
+import com.vprolabs.vunstable.vUnstable;
+import com.vprolabs.vunstable.scheduler.TaskScheduler;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -62,28 +63,26 @@ public class AdminNotifier implements Listener {
         plugin.getLogger().info("[vUnstable] Admin '" + player.getName() + "' joined - optimization status: NOT OPTIMIZED");
         
         // Delay notification by 3 seconds
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                // Double-check player is still online
-                if (!player.isOnline()) {
-                    return;
-                }
-                
-                // Mark as notified
-                notifiedAdmins.add(player.getUniqueId());
-                
-                // Send messages
-                sendOptimizationMessage(player);
-                
-                // Play sound
-                try {
-                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 0.5f);
-                } catch (Exception ignored) {
-                    // Sound might not exist in some versions
-                }
+        TaskScheduler scheduler = ((vUnstable) plugin).getSchedulerManager();
+        scheduler.runTaskLater(() -> {
+            // Double-check player is still online
+            if (!player.isOnline()) {
+                return;
             }
-        }.runTaskLater(plugin, DELAY_TICKS);
+            
+            // Mark as notified
+            notifiedAdmins.add(player.getUniqueId());
+            
+            // Send messages
+            sendOptimizationMessage(player);
+            
+            // Play sound
+            try {
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 0.5f);
+            } catch (Exception ignored) {
+                // Sound might not exist in some versions
+            }
+        }, DELAY_TICKS);
     }
     
     /**

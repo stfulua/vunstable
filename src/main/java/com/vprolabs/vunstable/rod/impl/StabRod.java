@@ -16,7 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
+import com.vprolabs.vunstable.scheduler.TaskScheduler;
 import org.bukkit.util.Vector;
 
 /**
@@ -26,6 +26,7 @@ import org.bukkit.util.Vector;
  * Two modes:
  * - INSTANT: TNT spawns directly at target depth (0.5s fuse)
  * - FALL: Traditional falling TNT from sky
+ * v1.2.0: Full Folia thread safety - all world/block operations use location-based scheduling.
  */
 public class StabRod implements RodManager.Rod {
     
@@ -49,57 +50,82 @@ public class StabRod implements RodManager.Rod {
         ItemMeta meta = item.getItemMeta();
         
         if (meta != null) {
-            meta.displayName(Component.text("Stab").color(TextColor.color(0x8B0000)));
-            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            // Custom name from config
+            String customName = config.getStabRodName();
+            meta.displayName(Component.text(customName).color(TextColor.color(0x8B0000)));
+            
+            // Enchanted glow (configurable)
+            if (config.isStabRodEnchanted()) {
+                meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            }
+            
             item.setItemMeta(meta);
         }
         
-        item.setDurability((short) 63);
+        // Set durability using Damageable API (1.13+)
+        if (meta instanceof org.bukkit.inventory.meta.Damageable damageable) {
+            damageable.setDamage(1); // 63/64 durability used = 1 damage
+            item.setItemMeta(damageable);
+        }
         return item;
     }
     
     @Override
     public void activate(Location target, Player player) {
-        int startY = 0;
-        int endY = 0;
-        int count = 0;
+        // Get scheduler for thread-safe operations
+        TaskScheduler scheduler = ((vUnstable) plugin).getSchedulerManager();
         
-        try {
-            World world = target.getWorld();
-            int surfaceY = world.getHighestBlockYAt(target.getBlockX(), target.getBlockZ());
-            startY = surfaceY + 100;
-            endY = Math.max(-64, target.getBlockY() - config.getStabDepth());
+        // Perform ALL world/block operations on the target's region thread
+        scheduler.runAtLocation(target, () -> {
+            int startY = 0;
+            int endY = 0;
+            int count = 0;
             
-            // Get configurable fuse and spawn mode
-            int fuseTicks = config.getStabFuseTicks();
-            String spawnMode = config.getStabSpawnMode();
-            boolean teleportEffect = config.isStabTeleportEffect();
-            
-            if ("INSTANT".equalsIgnoreCase(spawnMode)) {
-                // INSTANT MODE: Spawn TNT directly at bottom
-                activateInstantMode(target, player, world, surfaceY, endY, fuseTicks, teleportEffect);
-            } else {
-                // FALL MODE: Traditional falling TNT
-                activateFallMode(target, player, world, startY, endY, fuseTicks);
-            }
+            try {
+                World world = target.getWorld();
                 
-        } catch (Exception e) {
-            com.vprolabs.vunstable.util.ErrorHandler.getInstance().handle(e, 
-                "StabRod.activate()", 
-                "StabRod", "activate", 58,
-                player, target, 
-                count + " TNT Stab spawn attempt from Y" + startY + " to Y" + endY);
-            
-            if (player != null && player.isOnline()) {
-                player.sendMessage(net.kyori.adventure.text.Component.text(
-                    "[vUnstable] An error occurred while activating the Stab rod! Staff have been notified.")
-                    .color(net.kyori.adventure.text.format.NamedTextColor.RED));
+                // Block access - must be on region thread for Folia
+                int surfaceY = world.getHighestBlockYAt(target.getBlockX(), target.getBlockZ());
+                startY = surfaceY + 100;
+                endY = Math.max(-64, target.getBlockY() - config.getStabDepth());
+                
+                // Get configurable fuse and spawn mode
+                int fuseTicks = config.getStabFuseTicks();
+                String spawnMode = config.getStabSpawnMode();
+                boolean teleportEffect = config.isStabTeleportEffect();
+                
+                // Store final values for async use
+                final int finalSurfaceY = surfaceY;
+                final int finalEndY = endY;
+                final int finalStartY = startY;
+                
+                if ("INSTANT".equalsIgnoreCase(spawnMode)) {
+                    // INSTANT MODE: Spawn TNT directly at bottom
+                    activateInstantMode(target, player, world, finalSurfaceY, finalEndY, fuseTicks, teleportEffect);
+                } else {
+                    // FALL MODE: Traditional falling TNT
+                    activateFallMode(target, player, world, finalStartY, finalEndY, fuseTicks);
+                }
+                    
+            } catch (Exception e) {
+                com.vprolabs.vunstable.util.ErrorHandler.getInstance().handle(e, 
+                    "StabRod.activate()", 
+                    "StabRod", "activate", 58,
+                    player, target, 
+                    count + " TNT Stab spawn attempt from Y" + startY + " to Y" + endY);
+                
+                if (player != null && player.isOnline()) {
+                    player.sendMessage(net.kyori.adventure.text.Component.text(
+                        "[vUnstable] An error occurred while activating the Stab rod! Staff have been notified.")
+                        .color(net.kyori.adventure.text.format.NamedTextColor.RED));
+                }
             }
-        }
+        });
     }
     
     /**
      * INSTANT MODE: Spawn TNT directly at target depth with no falling physics.
+     * v1.2.0: Uses location-based scheduling for Folia thread safety.
      */
     private void activateInstantMode(Location target, Player player, World world, 
                                      int surfaceY, int endY, int fuseTicks, boolean teleportEffect) {
@@ -110,34 +136,36 @@ public class StabRod implements RodManager.Rod {
         plugin.getLogger().info("[vUnstable] STAB INSTANT at X" + centerX + " Z" + centerZ + 
             " | Surface Y" + surfaceY + " to Bottom Y" + endY + " | " + count + " TNT");
         
+        TaskScheduler scheduler = ((vUnstable) plugin).getSchedulerManager();
+        
         // Visual effect at surface (optional teleport animation)
+        // Must be on region thread for Folia
         if (teleportEffect && player != null) {
-            world.spawnParticle(Particle.PORTAL, target.getX(), surfaceY + 1, target.getZ(), 
-                50, 0.5, 1, 0.5, 0.1);
-            world.playSound(target, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.5f);
+            scheduler.runAtLocation(target, () -> {
+                world.spawnParticle(Particle.PORTAL, target.getX(), surfaceY + 1, target.getZ(), 
+                    50, 0.5, 1, 0.5, 0.1);
+                world.playSound(target, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.5f);
+            });
         }
         
         // Small delay for visual effect, then spawn TNT at depth
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                int spawned = 0;
-                for (int y = surfaceY; y >= endY; y--) {
-                    // Slight random offset for natural look
-                    double offsetX = (Math.random() - 0.5) * 0.3;
-                    double offsetZ = (Math.random() - 0.5) * 0.3;
-                    Location spawnLoc = new Location(world, centerX + offsetX, y, centerZ + offsetZ);
-                    
-                    // Spawn TNT with zero velocity (no fall)
-                    spawnEngine.queueInstantSpawn(spawnLoc, new Vector(0, 0, 0), 
-                        fuseTicks, 4.0f, false, true);
-                    spawned++;
-                }
+        scheduler.runAtLocationDelayed(target, () -> {
+            int spawned = 0;
+            for (int y = surfaceY; y >= endY; y--) {
+                // Slight random offset for natural look
+                double offsetX = (Math.random() - 0.5) * 0.3;
+                double offsetZ = (Math.random() - 0.5) * 0.3;
+                Location spawnLoc = new Location(world, centerX + offsetX, y, centerZ + offsetZ);
                 
-                plugin.getLogger().info("[vUnstable] STAB INSTANT: " + spawned + " TNT teleported to depth, " +
-                    "exploding in " + (fuseTicks / 20.0) + " seconds");
+                // Spawn TNT with zero velocity (no fall)
+                spawnEngine.queueInstantSpawn(spawnLoc, new Vector(0, 0, 0), 
+                    fuseTicks, 4.0f, false, true);
+                spawned++;
             }
-        }.runTaskLater(plugin, teleportEffect ? 2L : 0L); // 0.1s delay if effect enabled
+            
+            plugin.getLogger().info("[vUnstable] STAB INSTANT: " + spawned + " TNT teleported to depth, " +
+                "exploding in " + (fuseTicks / 20.0) + " seconds");
+        }, teleportEffect ? 2L : 0L); // 0.1s delay if effect enabled
     }
     
     /**

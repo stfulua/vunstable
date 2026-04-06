@@ -2,44 +2,47 @@ package com.vprolabs.vunstable.engine;
 
 import com.vprolabs.vunstable.config.ConfigManager;
 import com.vprolabs.vunstable.listener.EntityListener;
+import com.vprolabs.vunstable.scheduler.ScheduledTask;
 import com.vprolabs.vunstable.vUnstable;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * AsyncSpawnEngine - Handles async TNT spawning with rate limiting.
+ * AsyncSpawnEngine - Handles TNT spawning with rate limiting.
  * 
- * Features:
- * - Queue-based spawning (200 TNT per tick max)
- * - MethodHandles for fast NMS reflection
- * - Metadata tagging for Nuke/Stab identification
- * - Proper yield setting for block damage
- * - Fallback to Bukkit API if NMS fails
+ * v1.2.0: Decentralized time-based synchronization for Folia.
+ * - Each TNT has its own entity-local timer
+ * - Absolute timestamp-based explosion synchronization
+ * - No global UUID tracking needed
  */
 public class AsyncSpawnEngine {
     
     private final JavaPlugin plugin;
     private final ConfigManager config;
     private final Deque<SpawnRequest> spawnQueue;
-    private final List<Object> spawnedNmsEntities;
-    private final List<TNTPrimed> spawnedBukkitEntities;
-    private BukkitTask spawnTask;
     private EntityListener entityListener;
+    private final boolean isFolia;
+    
+    // Ground-based sync tracking
+    // nukeId -> Set of TNT UUIDs that haven't landed yet
+    private final Map<String, Set<UUID>> pendingNukes = new ConcurrentHashMap<>();
+    // nukeId -> nuke total count
+    private final Map<String, Integer> nukeTotalCounts = new ConcurrentHashMap<>();
+    // nukeId -> count of TNT that exploded via failsafe (for summary)
+    private final Map<String, Integer> nukeFailsafeCounts = new ConcurrentHashMap<>();
     
     // NMS MethodHandles
     private MethodHandle getHandle;
@@ -54,28 +57,31 @@ public class AsyncSpawnEngine {
         this.plugin = plugin;
         this.config = ConfigManager.getInstance();
         this.spawnQueue = new ArrayDeque<>();
-        this.spawnedNmsEntities = new ArrayList<>();
-        this.spawnedBukkitEntities = new ArrayList<>();
+        this.isFolia = detectFolia();
         initNMS();
         startSpawnTask();
+    }
+    
+    private boolean detectFolia() {
+        try {
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
     
     public void setEntityListener(EntityListener listener) {
         this.entityListener = listener;
     }
     
-    /**
-     * Initialize NMS MethodHandles for fast reflection.
-     */
     private void initNMS() {
         try {
             MethodHandles.Lookup lookup = MethodHandles.publicLookup();
             
-            // CraftWorld.getHandle()
             Class<?> craftWorld = Class.forName("org.bukkit.craftbukkit.CraftWorld");
             getHandle = lookup.findVirtual(craftWorld, "getHandle", MethodType.methodType(Class.forName("net.minecraft.server.level.ServerLevel")));
             
-            // PrimedTnt constructor
             Class<?> primedTnt = Class.forName("net.minecraft.world.entity.item.PrimedTnt");
             Class<?> levelClass = Class.forName("net.minecraft.world.level.Level");
             
@@ -92,11 +98,9 @@ public class AsyncSpawnEngine {
                 return;
             }
             
-            // Methods
             setDeltaMovement = lookup.findVirtual(primedTnt, "setDeltaMovement", MethodType.methodType(void.class, double.class, double.class, double.class));
             setFuse = lookup.findVirtual(primedTnt, "setFuse", MethodType.methodType(void.class, int.class));
             
-            // Try to find yield method (may not exist in all versions)
             try {
                 setYield = lookup.findVirtual(primedTnt, "setYield", MethodType.methodType(void.class, float.class));
             } catch (Exception e) {
@@ -116,12 +120,7 @@ public class AsyncSpawnEngine {
         }
     }
     
-    /**
-     * Start the spawn task that processes the queue.
-     * Uses optimized rate from SpigotOptimizer.
-     */
     private void startSpawnTask() {
-        // Use optimized rate from SpigotOptimizer if available
         int rate = config.getMaxTntPerTick();
         var params = vUnstable.getNukeParams();
         if (params != null) {
@@ -129,17 +128,9 @@ public class AsyncSpawnEngine {
         }
         
         final int spawnRate = rate;
-        spawnTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                processQueue(spawnRate);
-            }
-        }.runTaskTimer(plugin, 0L, 1L);
+        vUnstable.getInstance().getSchedulerManager().runTaskTimer(() -> processQueue(spawnRate), 0L, 1L);
     }
     
-    /**
-     * Process up to 'max' spawns from the queue.
-     */
     private void processQueue(int max) {
         int processed = 0;
         while (processed < max && !spawnQueue.isEmpty()) {
@@ -159,191 +150,293 @@ public class AsyncSpawnEngine {
         }
     }
     
-    /**
-     * Spawn a single TNT entity with proper metadata and yield.
-     */
     private void spawnTNT(SpawnRequest req) {
-        if (nmsAvailable) {
-            try {
-                Object level = getHandle.invoke(req.location.getWorld());
-                Object tnt = ((MethodHandle) tntConstructor).invoke(level, req.location.getX(), req.location.getY(), req.location.getZ(), null);
-                setDeltaMovement.invoke(tnt, req.velocity.getX(), req.velocity.getY(), req.velocity.getZ());
-                setFuse.invoke(tnt, req.fuseTicks);
-                
-                // Set yield via NMS if available
-                if (setYield != null) {
-                    setYield.invoke(tnt, req.yield);
-                }
-                
-                Class<?> spawnReason = Class.forName("org.bukkit.event.entity.CreatureSpawnEvent$SpawnReason");
-                boolean added = (boolean) addEntity.invoke(level, tnt, spawnReason.getField("CUSTOM").get(null));
-                
-                if (added) {
-                    spawnedNmsEntities.add(tnt);
+        vUnstable.getInstance().getSchedulerManager().runAtLocation(req.location, () -> {
+            // Try NMS first
+            if (nmsAvailable) {
+                try {
+                    Object level = getHandle.invoke(req.location.getWorld());
+                    Object tnt = ((MethodHandle) tntConstructor).invoke(level, req.location.getX(), req.location.getY(), req.location.getZ(), null);
+                    setDeltaMovement.invoke(tnt, req.velocity.getX(), req.velocity.getY(), req.velocity.getZ());
+                    setFuse.invoke(tnt, req.fuseTicks);
                     
-                    // Mark world as having Nuke TNT for ground detection
-                    if (req.isNuke && entityListener != null) {
-                        entityListener.markNukeActive(req.location.getWorld());
+                    if (setYield != null) {
+                        setYield.invoke(tnt, req.yield);
                     }
                     
-                    return;
+                    Class<?> spawnReason = Class.forName("org.bukkit.event.entity.CreatureSpawnEvent$SpawnReason");
+                    boolean added = (boolean) addEntity.invoke(level, tnt, spawnReason.getField("CUSTOM").get(null));
+                    
+                    if (added) {
+                        if (req.isNuke && entityListener != null) {
+                            entityListener.markNukeActive(req.location.getWorld());
+                        }
+                        
+                        // CRITICAL FIX: Get the Bukkit entity and attach metadata + timer for Nuke TNT
+                        if (req.isNuke || req.isStab) {
+                            try {
+                                Object bukkitEntity = tnt.getClass().getMethod("getBukkitEntity").invoke(tnt);
+                                if (bukkitEntity instanceof TNTPrimed tntEntity) {
+                                    // Attach metadata
+                                    if (req.isNuke) {
+                                        tntEntity.setMetadata(EntityListener.META_NUKE_ROD, new FixedMetadataValue(plugin, true));
+                                        tntEntity.setMetadata(EntityListener.META_NUKE_RING_INDEX, new FixedMetadataValue(plugin, req.ringIndex));
+                                        // Attach nukeId for ground-based sync
+                                        if (req.nukeId != null) {
+                                            tntEntity.setMetadata("nukeId", new FixedMetadataValue(plugin, req.nukeId));
+                                        }
+                                    } else if (req.isStab) {
+                                        tntEntity.setMetadata(EntityListener.META_STAB_ROD, new FixedMetadataValue(plugin, true));
+                                    }
+                                    
+                                    // Attach explosion timer for Nuke TNT with sync
+                                    if (req.isNuke) {
+                                        attachEntityTimer(tntEntity, req.spawnTimeMs, req.nukeId);
+                                    }
+                                }
+                            } catch (Exception metaEx) {
+                                plugin.getLogger().warning("[vUnstable] Failed to attach metadata to NMS TNT: " + metaEx.getMessage());
+                            }
+                        }
+                        return;
+                    }
+                } catch (Throwable e) {
+                    com.vprolabs.vunstable.util.ErrorHandler.getInstance().handle(e, 
+                        "AsyncSpawnEngine.spawnTNT() [NMS]", 
+                        "AsyncSpawnEngine", "spawnTNT", 156,
+                        null, req.location, 
+                        "NMS TNT spawn failed, falling back to Bukkit API");
                 }
-            } catch (Throwable e) {
-                // Log NMS failure
-                com.vprolabs.vunstable.util.ErrorHandler.getInstance().handle(e, 
-                    "AsyncSpawnEngine.spawnTNT() [NMS]", 
-                    "AsyncSpawnEngine", "spawnTNT", 156,
-                    null, req.location, 
-                    "NMS TNT spawn failed, falling back to Bukkit API");
-                // Fall through to Bukkit
             }
-        }
-        
-        // Bukkit fallback
-        try {
-            TNTPrimed tnt = req.location.getWorld().spawn(req.location, TNTPrimed.class, entity -> {
-                entity.setVelocity(req.velocity);
-                entity.setFuseTicks(req.fuseTicks);
-                // CRITICAL: Set yield for block damage
-                entity.setYield(req.yield);
-                
-                // Add metadata for identification
-                if (req.isNuke) {
-                    entity.setMetadata(EntityListener.META_NUKE_ROD, new FixedMetadataValue(plugin, true));
-                    // Add sync delay metadata for synchronized explosions
-                    if (req.syncDelay > 0) {
-                        entity.setMetadata(EntityListener.META_NUKE_SYNC_DELAY, new FixedMetadataValue(plugin, req.syncDelay));
+            
+            // Bukkit fallback
+            try {
+                TNTPrimed tnt = req.location.getWorld().spawn(req.location, TNTPrimed.class, entity -> {
+                    entity.setVelocity(req.velocity);
+                    entity.setFuseTicks(req.fuseTicks);
+                    entity.setYield(req.yield);
+                    
+                    if (req.isNuke) {
+                        entity.setMetadata(EntityListener.META_NUKE_ROD, new FixedMetadataValue(plugin, true));
                         entity.setMetadata(EntityListener.META_NUKE_RING_INDEX, new FixedMetadataValue(plugin, req.ringIndex));
-                    }
-                } else if (req.isStab) {
-                    entity.setMetadata(EntityListener.META_STAB_ROD, new FixedMetadataValue(plugin, true));
-                }
-            }, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CUSTOM);
-            
-            if (tnt != null) {
-                spawnedBukkitEntities.add(tnt);
-                
-                // Mark world as having Nuke TNT
-                if (req.isNuke && entityListener != null) {
-                    entityListener.markNukeActive(req.location.getWorld());
-                }
-                
-                plugin.getLogger().fine("[vUnstable] Spawned " + (req.isNuke ? "Nuke" : "Stab") + 
-                    " TNT at " + req.location.getBlockX() + "," + req.location.getBlockY() + "," + req.location.getBlockZ() + 
-                    " with fuse " + req.fuseTicks + ", yield " + req.yield);
-            }
-        } catch (Exception e) {
-            com.vprolabs.vunstable.util.ErrorHandler.getInstance().handle(e, 
-                "AsyncSpawnEngine.spawnTNT() [Bukkit]", 
-                "AsyncSpawnEngine", "spawnTNT", 202,
-                null, req.location, 
-                "Bukkit TNT spawn failed at " + req.location);
-        }
-    }
-    
-    /**
-     * Queue a TNT spawn request.
-     */
-    public void queueSpawn(Location location, Vector velocity, int fuseTicks) {
-        spawnQueue.offer(new SpawnRequest(location, velocity, fuseTicks, 4.0f, false, false));
-    }
-    
-    /**
-     * Queue a TNT spawn request with full parameters.
-     */
-    public void queueSpawn(Location location, Vector velocity, int fuseTicks, float yield, boolean isNuke, boolean isStab) {
-        spawnQueue.offer(new SpawnRequest(location, velocity, fuseTicks, yield, isNuke, isStab));
-    }
-    
-    /**
-     * Queue multiple spawns for a nuke ring.
-     */
-    public void queueRingSpawns(double centerX, double centerZ, double spawnY, double radius, int count, 
-                                double velocityY, int fuseTicks, org.bukkit.World world) {
-        queueRingSpawns(centerX, centerZ, spawnY, radius, count, velocityY, fuseTicks, world, 0, 0);
-    }
-    
-    /**
-     * Queue multiple spawns for a nuke ring with synchronization delay.
-     * @param ringIndex The ring index (0 = inner, 9 = outer)
-     * @param syncDelay Ticks to delay explosion after ground hit (for synchronized detonation)
-     */
-    public void queueRingSpawns(double centerX, double centerZ, double spawnY, double radius, int count, 
-                                double velocityY, int fuseTicks, org.bukkit.World world, int ringIndex, int syncDelay) {
-        for (int i = 0; i < count; i++) {
-            double angle = (2.0 * Math.PI * i) / count;
-            double x = centerX + (Math.cos(angle) * radius);
-            double z = centerZ + (Math.sin(angle) * radius);
-            Location loc = new Location(world, x, spawnY, z);
-            // Nuke TNT: long fuse, marked as nuke, full yield, with sync info
-            spawnQueue.offer(new SpawnRequest(loc, new Vector(0, velocityY, 0), fuseTicks, 4.0f, true, false, ringIndex, syncDelay));
-        }
-    }
-    
-    /**
-     * Queue multiple spawns for a nuke ring and return UUIDs for tracking.
-     * This is used for reliable NukeRod tracking.
-     */
-    public List<UUID> queueRingSpawnsTracked(double centerX, double centerZ, double spawnY, double radius, int count, 
-                                             double velocityY, int fuseTicks, org.bukkit.World world, int ringIndex, int syncDelay) {
-        List<UUID> spawnedIds = new ArrayList<>();
-        
-        for (int i = 0; i < count; i++) {
-            double angle = (2.0 * Math.PI * i) / count;
-            double x = centerX + (Math.cos(angle) * radius);
-            double z = centerZ + (Math.sin(angle) * radius);
-            Location loc = new Location(world, x, spawnY, z);
-            
-            // Spawn immediately and capture UUID
-            try {
-                TNTPrimed tnt = world.spawn(loc, TNTPrimed.class, entity -> {
-                    entity.setVelocity(new Vector(0, velocityY, 0));
-                    entity.setFuseTicks(fuseTicks);
-                    entity.setYield(4.0f);
-                    entity.setMetadata(EntityListener.META_NUKE_ROD, new FixedMetadataValue(plugin, true));
-                    entity.setMetadata(EntityListener.META_NUKE_RING_INDEX, new FixedMetadataValue(plugin, ringIndex));
-                    if (syncDelay > 0) {
-                        entity.setMetadata(EntityListener.META_NUKE_SYNC_DELAY, new FixedMetadataValue(plugin, syncDelay));
+                        // Attach nukeId for ground-based sync
+                        if (req.nukeId != null) {
+                            entity.setMetadata("nukeId", new FixedMetadataValue(plugin, req.nukeId));
+                        }
+                    } else if (req.isStab) {
+                        entity.setMetadata(EntityListener.META_STAB_ROD, new FixedMetadataValue(plugin, true));
                     }
                 }, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CUSTOM);
                 
                 if (tnt != null) {
-                    spawnedIds.add(tnt.getUniqueId());
+                    if (req.isNuke && entityListener != null) {
+                        entityListener.markNukeActive(req.location.getWorld());
+                    }
+                    
+                    // Attach entity-local timer for decentralized explosion handling
+                    if (req.isNuke) {
+                        attachEntityTimer(tnt, req.spawnTimeMs, req.nukeId);
+                    }
                 }
             } catch (Exception e) {
-                plugin.getLogger().warning("[vUnstable] Failed to spawn tracked TNT: " + e.getMessage());
+                com.vprolabs.vunstable.util.ErrorHandler.getInstance().handle(e, 
+                    "AsyncSpawnEngine.spawnTNT() [Bukkit]", 
+                    "AsyncSpawnEngine", "spawnTNT", 202,
+                    null, req.location, 
+                    "Bukkit TNT spawn failed at " + req.location);
             }
-        }
-        
-        return spawnedIds;
+        });
     }
     
     /**
-     * Queue multiple spawns for a stab column.
+     * Attach a decentralized timer to a TNT entity.
+     * Folia: Ground-based sync (wait for all TNT to land, then explode together)
+     * Bukkit: Time-based sync (fixed timer)
      */
+    private void attachEntityTimer(TNTPrimed tnt, long spawnTimeMs, String nukeId) {
+        // Track this TNT in the pending set for ground-based sync
+        if (nukeId != null) {
+            Set<UUID> pending = pendingNukes.get(nukeId);
+            if (pending != null) {
+                pending.add(tnt.getUniqueId());
+            }
+        }
+        
+        // Ground detection task - runs every tick
+        final ScheduledTask[] taskHolder = new ScheduledTask[1];
+        final boolean[] wasFailsafe = { false };
+        
+        taskHolder[0] = vUnstable.getInstance().getSchedulerManager().runAtEntityTimer(tnt, () -> {
+            if (nukeId == null) return;
+            
+            // Ground detection - freeze when landed
+            if (tnt.isOnGround() && !tnt.hasMetadata("landed")) {
+                tnt.setMetadata("landed", new FixedMetadataValue(plugin, true));
+                freezeTNT(tnt);
+                
+                // Mark this TNT as landed
+                Set<UUID> pending = pendingNukes.get(nukeId);
+                if (pending != null) {
+                    pending.remove(tnt.getUniqueId());
+                    
+                    // Check if all TNT have landed
+                    if (pending.isEmpty()) {
+                        // ALL TNT LANDED! Trigger explosion immediately
+                        int total = nukeTotalCounts.getOrDefault(nukeId, 0);
+                        int failsafe = nukeFailsafeCounts.getOrDefault(nukeId, 0);
+                        int landed = total - failsafe;
+                        if (failsafe > 0) {
+                            plugin.getLogger().info("[vUnstable] All TNT ready! " + landed + " landed, " + failsafe + " via failsafe. Exploding now...");
+                        } else {
+                            plugin.getLogger().info("[vUnstable] All " + total + " TNT landed! Exploding now...");
+                        }
+                        triggerNukeExplosion(nukeId);
+                    }
+                }
+            }
+            
+            // Global 4-second timeout from spawn
+            long elapsedMs = System.currentTimeMillis() - spawnTimeMs;
+            if (elapsedMs > 4000 && !wasFailsafe[0]) {
+                wasFailsafe[0] = true;
+                // Track failsafe explosion
+                Integer current = nukeFailsafeCounts.get(nukeId);
+                if (current != null) {
+                    nukeFailsafeCounts.put(nukeId, current + 1);
+                }
+                forceExplode(tnt);
+                if (taskHolder[0] != null) {
+                    taskHolder[0].cancel();
+                }
+            }
+        }, 1L, 1L);
+    }
+    
+    /**
+     * Trigger synchronized explosion for all TNT in a nuke (Folia only).
+     * Finds all TNT with this nukeId and explodes them immediately.
+     */
+    private void triggerNukeExplosion(String nukeId) {
+        // Clean up tracking
+        pendingNukes.remove(nukeId);
+        nukeTotalCounts.remove(nukeId);
+        
+        // Find and explode all TNT with this nukeId
+        // This runs on each entity's own timer, so each TNT will explode itself
+        // when it detects the "explodeNow" metadata
+        for (org.bukkit.World world : plugin.getServer().getWorlds()) {
+            for (TNTPrimed tnt : world.getEntitiesByClass(TNTPrimed.class)) {
+                if (tnt.hasMetadata("nukeId")) {
+                    for (org.bukkit.metadata.MetadataValue mv : tnt.getMetadata("nukeId")) {
+                        if (mv.asString().equals(nukeId) && !tnt.hasMetadata("exploded")) {
+                            tnt.setMetadata("exploded", new FixedMetadataValue(plugin, true));
+                            forceExplode(tnt);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private void forceExplode(TNTPrimed tnt) {
+        // Try NMS first (most reliable)
+        try {
+            Object nmsTnt = tnt.getClass().getMethod("getHandle").invoke(tnt);
+            java.lang.reflect.Method setFuseMethod = nmsTnt.getClass().getMethod("setFuse", int.class);
+            setFuseMethod.invoke(nmsTnt, 0);
+            return;
+        } catch (Exception ignored) {}
+        
+        // Fall back to Bukkit API
+        try {
+            tnt.setFuseTicks(0);
+        } catch (Exception e2) {
+            // Last resort: create explosion at location
+            try {
+                tnt.getLocation().getWorld().createExplosion(tnt.getLocation(), 4.0f, false, true);
+                tnt.remove();
+            } catch (Exception e3) {
+                plugin.getLogger().severe("[vUnstable] CRITICAL: All explosion methods failed for TNT " + tnt.getUniqueId());
+            }
+        }
+    }
+    
+    private void freezeTNT(TNTPrimed tnt) {
+        try {
+            tnt.setVelocity(new Vector(0, 0, 0));
+            
+            try {
+                Object nmsTnt = tnt.getClass().getMethod("getHandle").invoke(tnt);
+                java.lang.reflect.Method setDelta = nmsTnt.getClass().getMethod("setDeltaMovement", double.class, double.class, double.class);
+                setDelta.invoke(nmsTnt, 0.0, 0.0, 0.0);
+                java.lang.reflect.Field hasImpulse = nmsTnt.getClass().getField("hasImpulse");
+                hasImpulse.setBoolean(nmsTnt, false);
+            } catch (Exception ignored) {}
+        } catch (Exception e) {
+            plugin.getLogger().warning("[vUnstable] Failed to freeze TNT: " + e.getMessage());
+        }
+    }
+    
+    public void queueSpawn(Location location, Vector velocity, int fuseTicks) {
+        spawnQueue.offer(new SpawnRequest(location, velocity, fuseTicks, 4.0f, false, false, 0, 0));
+    }
+    
+    public void queueSpawn(Location location, Vector velocity, int fuseTicks, float yield, boolean isNuke, boolean isStab) {
+        spawnQueue.offer(new SpawnRequest(location, velocity, fuseTicks, yield, isNuke, isStab, 0, 0));
+    }
+    
+    /**
+     * Queue multiple spawns for a nuke ring with ground-based synchronization.
+     * All platforms: Wait for all TNT to land, then explode immediately.
+     * 4-second timeout from spawn as failsafe.
+     */
+    public void queueRingSpawnsSync(double centerX, double centerZ, double spawnY, double radius, int count, 
+                                    double velocityY, int fuseTicks, org.bukkit.World world, int ringIndex, long spawnTimeMs, String nukeId) {
+        for (int i = 0; i < count; i++) {
+            double angle = (2.0 * Math.PI * i) / count;
+            double x = centerX + (Math.cos(angle) * radius);
+            double z = centerZ + (Math.sin(angle) * radius);
+            Location loc = new Location(world, x, spawnY, z);
+            spawnQueue.offer(new SpawnRequest(loc, new Vector(0, velocityY, 0), fuseTicks, 4.0f, true, false, ringIndex, spawnTimeMs, nukeId));
+        }
+    }
+    
+    /**
+     * Initialize tracking for a new nuke (ground-based sync).
+     */
+    public void initNukeTracking(String nukeId, int totalTnt) {
+        pendingNukes.put(nukeId, ConcurrentHashMap.newKeySet());
+        nukeTotalCounts.put(nukeId, totalTnt);
+        nukeFailsafeCounts.put(nukeId, 0);
+    }
+    
+    /**
+     * Clean up tracking for a nuke.
+     */
+    public void cleanupNukeTracking(String nukeId) {
+        pendingNukes.remove(nukeId);
+        nukeTotalCounts.remove(nukeId);
+        nukeFailsafeCounts.remove(nukeId);
+    }
+    
     public void queueColumnSpawns(double centerX, double centerZ, int startY, int endY,
                                    double velocityY, int fuseTicks, org.bukkit.World world) {
         for (int y = startY; y >= endY; y--) {
             Location loc = new Location(world, centerX, y, centerZ);
-            // Stab TNT: short fuse, marked as stab, full yield
             queueSpawn(loc, new Vector(0, velocityY, 0), fuseTicks, 4.0f, false, true);
         }
     }
     
-    /**
-     * Queue an instant spawn (for INSTANT mode - zero velocity, no falling).
-     */
     public void queueInstantSpawn(Location location, Vector velocity, int fuseTicks, 
                                    float yield, boolean isNuke, boolean isStab) {
-        // For instant spawns, we process immediately rather than queuing
-        // This ensures instant appearance at the target location
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        vUnstable.getInstance().getSchedulerManager().runAtLocation(location, () -> {
             try {
                 TNTPrimed tnt = location.getWorld().spawn(location, TNTPrimed.class, entity -> {
-                    entity.setVelocity(velocity);  // Usually (0,0,0) for instant
+                    entity.setVelocity(velocity);
                     entity.setFuseTicks(fuseTicks);
                     entity.setYield(yield);
-                    entity.setGravity(false);  // Disable gravity for instant mode
+                    entity.setGravity(false);
                     
                     if (isNuke) {
                         entity.setMetadata(EntityListener.META_NUKE_ROD, new FixedMetadataValue(plugin, true));
@@ -351,34 +444,17 @@ public class AsyncSpawnEngine {
                         entity.setMetadata(EntityListener.META_STAB_ROD, new FixedMetadataValue(plugin, true));
                     }
                 }, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CUSTOM);
-                
-                if (tnt != null) {
-                    plugin.getLogger().fine("[vUnstable] Instant spawn " + (isStab ? "Stab" : "Nuke") + 
-                        " TNT at " + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ());
-                }
             } catch (Exception e) {
                 plugin.getLogger().warning("[vUnstable] Failed to instant spawn TNT: " + e.getMessage());
             }
         });
     }
     
-    public List<Object> getSpawnedNmsEntities() {
-        return new ArrayList<>(spawnedNmsEntities);
-    }
-    
-    public List<TNTPrimed> getSpawnedBukkitEntities() {
-        return new ArrayList<>(spawnedBukkitEntities);
-    }
-    
     public void clearSpawnedEntities() {
-        spawnedNmsEntities.clear();
-        spawnedBukkitEntities.clear();
+        // No-op: we no longer track spawned entities centrally
     }
     
     public void shutdown() {
-        if (spawnTask != null) {
-            spawnTask.cancel();
-        }
         spawnQueue.clear();
     }
     
@@ -386,9 +462,6 @@ public class AsyncSpawnEngine {
         return nmsAvailable;
     }
     
-    /**
-     * Internal class for spawn requests.
-     */
     private static class SpawnRequest {
         final Location location;
         final Vector velocity;
@@ -397,13 +470,14 @@ public class AsyncSpawnEngine {
         final boolean isNuke;
         final boolean isStab;
         final int ringIndex;
-        final int syncDelay;
+        final long spawnTimeMs; // For 4-second timeout calculation
+        final String nukeId; // For ground-based sync
         
-        SpawnRequest(Location location, Vector velocity, int fuseTicks, float yield, boolean isNuke, boolean isStab) {
-            this(location, velocity, fuseTicks, yield, isNuke, isStab, 0, 0);
+        SpawnRequest(Location location, Vector velocity, int fuseTicks, float yield, boolean isNuke, boolean isStab, int ringIndex, long spawnTimeMs) {
+            this(location, velocity, fuseTicks, yield, isNuke, isStab, ringIndex, spawnTimeMs, null);
         }
         
-        SpawnRequest(Location location, Vector velocity, int fuseTicks, float yield, boolean isNuke, boolean isStab, int ringIndex, int syncDelay) {
+        SpawnRequest(Location location, Vector velocity, int fuseTicks, float yield, boolean isNuke, boolean isStab, int ringIndex, long spawnTimeMs, String nukeId) {
             this.location = location;
             this.velocity = velocity;
             this.fuseTicks = fuseTicks;
@@ -411,7 +485,8 @@ public class AsyncSpawnEngine {
             this.isNuke = isNuke;
             this.isStab = isStab;
             this.ringIndex = ringIndex;
-            this.syncDelay = syncDelay;
+            this.spawnTimeMs = spawnTimeMs;
+            this.nukeId = nukeId;
         }
     }
 }

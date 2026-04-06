@@ -12,7 +12,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
+import com.vprolabs.vunstable.vUnstable;
+import com.vprolabs.vunstable.scheduler.TaskScheduler;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -61,22 +62,20 @@ public class UpdateListener implements Listener {
         plugin.getLogger().info("[vUnstable] Admin '" + player.getName() + "' joined - notifying of available update");
         
         // Delay notification
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (!player.isOnline()) {
-                    return;
-                }
-                
-                notifiedPlayers.add(player.getUniqueId());
-                sendUpdateNotification(player);
-                
-                // Play sound
-                try {
-                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
-                } catch (Exception ignored) {}
+        TaskScheduler scheduler = ((vUnstable) plugin).getSchedulerManager();
+        scheduler.runTaskLater(() -> {
+            if (!player.isOnline()) {
+                return;
             }
-        }.runTaskLater(plugin, DELAY_TICKS);
+            
+            notifiedPlayers.add(player.getUniqueId());
+            sendUpdateNotification(player);
+            
+            // Play sound
+            try {
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
+            } catch (Exception ignored) {}
+        }, DELAY_TICKS);
     }
     
     private boolean isAdmin(Player player) {

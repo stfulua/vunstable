@@ -13,10 +13,13 @@ import com.vprolabs.vunstable.rod.RodManager;
 import com.vprolabs.vunstable.util.ErrorHandler;
 import com.vprolabs.vunstable.util.SystemInfoLogger;
 import com.vprolabs.vunstable.util.UpdateChecker;
+import com.vprolabs.vunstable.scheduler.BukkitSchedulerManager;
+import com.vprolabs.vunstable.scheduler.FoliaSchedulerManager;
+import com.vprolabs.vunstable.scheduler.TaskScheduler;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * vUnstable v1.1.2 - The Ultimate Orbital Strike Cannon
+ * vUnstable v1.2.0 - The Ultimate Orbital Strike Cannon
  * 
  * Features:
  * - Async spawning engine
@@ -29,7 +32,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  * - Configurable block drops
  * 
  * @author vProLabs
- * @version 1.1.2
+ * @version 1.2.0
  */
 public class vUnstable extends JavaPlugin {
     
@@ -44,6 +47,7 @@ public class vUnstable extends JavaPlugin {
     private ErrorHandler errorHandler;
     private AdminErrorNotifier adminErrorNotifier;
     private SystemInfoLogger systemInfoLogger;
+    private TaskScheduler schedulerManager;
     private static SpigotOptimizer.SpawnParameters nukeParams;
     
     @Override
@@ -51,14 +55,31 @@ public class vUnstable extends JavaPlugin {
         instance = this;
         
         // Log version
-        String version = getDescription().getVersion();
+        String version = getPluginMeta().getVersion();
         getLogger().info("[vUnstable] Current version: " + version);
+
+        // Initialize TaskScheduler
+        this.schedulerManager = isFolia() ? new FoliaSchedulerManager(this) : new BukkitSchedulerManager(this);
+        getLogger().info("[vUnstable] Platform: " + schedulerManager.getPlatformName());
+        getLogger().info("[vUnstable] Scheduler: " + (isFolia() ? "Folia (Regionized)" : "Bukkit (Global Thread)"));
         
         // Save default config
         saveDefaultConfig();
         
         // Initialize singletons
         this.configManager = new ConfigManager(this);
+        
+        // Log platform-specific settings (after configManager is initialized)
+        if (configManager.isFoliaServer()) {
+            getLogger().info("[vUnstable] Folia optimizations enabled:");
+            getLogger().info("[vUnstable]   - TNT count: " + configManager.getNukeTotalTnt() + " (reduced for region performance)");
+            getLogger().info("[vUnstable]   - Spawn rate: " + configManager.getNukeSpawnRatePerTick() + "/tick (slower for stability)");
+            getLogger().info("[vUnstable]   - Sync method: Time-based (decentralized)");
+        } else {
+            getLogger().info("[vUnstable] Bukkit mode:");
+            getLogger().info("[vUnstable]   - TNT count: " + configManager.getNukeTotalTnt());
+            getLogger().info("[vUnstable]   - Spawn rate: " + configManager.getNukeSpawnRatePerTick() + "/tick");
+        }
         this.spawnEngine = new AsyncSpawnEngine(this);
         this.rodManager = new RodManager(this);
         
@@ -114,6 +135,10 @@ public class vUnstable extends JavaPlugin {
         this.updateListener = new UpdateListener(this, updateChecker);
         getServer().getPluginManager().registerEvents(updateListener, this);
         
+        // Schedule Modrinth update check every 2 hours (144000 ticks)
+        // Notifies admins and console when a new version is found
+        startModrinthNotifier();
+        
         // Register admin error notifier for error notifications
         this.adminErrorNotifier = new AdminErrorNotifier(this);
         getServer().getPluginManager().registerEvents(adminErrorNotifier, this);
@@ -137,7 +162,7 @@ public class vUnstable extends JavaPlugin {
             getLogger().warning("[vUnstable] Command 'rod' not registered (alias may be handled by 'vunstable')");
         }
         
-        getLogger().info("vUnstable v1.1.2 enabled");
+        getLogger().info("vUnstable v1.2.0 enabled");
     }
     
     @Override
@@ -145,7 +170,75 @@ public class vUnstable extends JavaPlugin {
         if (spawnEngine != null) {
             spawnEngine.shutdown();
         }
-        getLogger().info("vUnstable v1.1.2 disabled");
+        getLogger().info("vUnstable v1.2.0 disabled");
+    }
+
+    private boolean isFolia() {
+        try {
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+    
+    /**
+     * Starts the Modrinth update notifier that checks for updates every 2 hours.
+     * Notifies console and online admins when a new version is available.
+     */
+    private void startModrinthNotifier() {
+        // 2 hours = 20 ticks/second * 3600 seconds * 2 hours = 144000 ticks
+        long checkIntervalTicks = 20L * 3600L * 2L;
+        
+        schedulerManager.runTaskTimer(() -> {
+            getLogger().info("[vUnstable] Running scheduled Modrinth update check...");
+            
+            updateChecker.checkForUpdates().thenAccept(updateAvailable -> {
+                if (updateAvailable) {
+                    String latestVersion = updateChecker.getLatestVersion();
+                    String currentVersion = updateChecker.getCurrentVersion();
+                    String downloadUrl = updateChecker.getDownloadUrl();
+                    
+                    // Log to console
+                    getLogger().info("[vUnstable] ==========================================");
+                    getLogger().info("[vUnstable] NEW VERSION AVAILABLE!");
+                    getLogger().info("[vUnstable] Current: " + currentVersion);
+                    getLogger().info("[vUnstable] Latest: " + latestVersion);
+                    getLogger().info("[vUnstable] Download: " + downloadUrl);
+                    getLogger().info("[vUnstable] ==========================================");
+                    
+                    // Notify online admins
+                    getServer().getOnlinePlayers().stream()
+                        .filter(p -> p.hasPermission("vunstable.admin") || p.isOp())
+                        .forEach(admin -> {
+                            admin.sendMessage(net.kyori.adventure.text.Component.text("[vUnstable] ")
+                                .color(net.kyori.adventure.text.format.NamedTextColor.DARK_RED)
+                                .append(net.kyori.adventure.text.Component.text("New version available! ")
+                                    .color(net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                                .append(net.kyori.adventure.text.Component.text(currentVersion + " -> " + latestVersion)
+                                    .color(net.kyori.adventure.text.format.NamedTextColor.GREEN)));
+                            admin.sendMessage(net.kyori.adventure.text.Component.text("[vUnstable] ")
+                                .color(net.kyori.adventure.text.format.NamedTextColor.DARK_RED)
+                                .append(net.kyori.adventure.text.Component.text("Download: ")
+                                    .color(net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                                .append(net.kyori.adventure.text.Component.text(downloadUrl)
+                                    .color(net.kyori.adventure.text.format.NamedTextColor.AQUA)
+                                    .decorate(net.kyori.adventure.text.format.TextDecoration.UNDERLINED)
+                                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.openUrl(downloadUrl))
+                                    .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
+                                        net.kyori.adventure.text.Component.text("Click to open download page")
+                                            .color(net.kyori.adventure.text.format.NamedTextColor.GRAY)))));
+                        });
+                } else {
+                    getLogger().fine("[vUnstable] Scheduled update check complete. No new version found.");
+                }
+            }).exceptionally(ex -> {
+                getLogger().warning("[vUnstable] Scheduled update check failed: " + ex.getMessage());
+                return null;
+            });
+        }, checkIntervalTicks, checkIntervalTicks);
+        
+        getLogger().info("[vUnstable] Modrinth notifier started. Checking every 2 hours.");
     }
     
     public static vUnstable getInstance() {
@@ -183,6 +276,10 @@ public class vUnstable extends JavaPlugin {
     public ErrorHandler getErrorHandler() {
         return errorHandler;
     }
+
+    public TaskScheduler getSchedulerManager() {
+        return schedulerManager;
+    }
     
     /**
      * Gets the optimized spawn parameters for Nuke Rod.
@@ -192,3 +289,4 @@ public class vUnstable extends JavaPlugin {
         return nukeParams;
     }
 }
+

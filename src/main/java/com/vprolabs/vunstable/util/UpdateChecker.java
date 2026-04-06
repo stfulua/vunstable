@@ -3,6 +3,7 @@ package com.vprolabs.vunstable.util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.vprolabs.vunstable.vUnstable;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.BufferedReader;
@@ -39,7 +40,7 @@ public class UpdateChecker {
     
     public UpdateChecker(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.currentVersion = plugin.getDescription().getVersion();
+        this.currentVersion = plugin.getPluginMeta().getVersion();
     }
     
     /**
@@ -47,18 +48,22 @@ public class UpdateChecker {
      * Returns CompletableFuture that completes when check is done.
      */
     public CompletableFuture<Boolean> checkForUpdates() {
-        return CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        
+        vUnstable.getInstance().getSchedulerManager().runTaskAsync(() -> {
             // Check if cache is still valid
             long now = System.currentTimeMillis();
             if (latestVersion != null && (now - lastCheckTime) < CACHE_DURATION_MS) {
                 plugin.getLogger().info("[vUnstable] Using cached update check result");
-                return updateAvailable;
+                future.complete(updateAvailable);
+                return;
             }
             
             // Prevent concurrent checks
             if (checkInProgress) {
                 plugin.getLogger().fine("[vUnstable] Update check already in progress");
-                return updateAvailable;
+                future.complete(updateAvailable);
+                return;
             }
             
             checkInProgress = true;
@@ -66,7 +71,7 @@ public class UpdateChecker {
             try {
                 plugin.getLogger().info("[vUnstable] Checking Modrinth for updates...");
                 
-                HttpURLConnection conn = (HttpURLConnection) new URL(API_URL).openConnection();
+                HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(API_URL).toURL().openConnection();
                 conn.setRequestMethod("GET");
                 conn.setRequestProperty("User-Agent", "vUnstable-UpdateChecker/" + currentVersion);
                 conn.setConnectTimeout(5000); // 5 second timeout
@@ -110,7 +115,8 @@ public class UpdateChecker {
                         plugin.getLogger().info("[vUnstable] Update check complete. Latest: " + latestVersion + 
                             " (Current: " + currentVersion + ", Update available: " + updateAvailable + ")");
                         
-                        return updateAvailable;
+                        future.complete(updateAvailable);
+                        return;
                     } else {
                         plugin.getLogger().warning("[vUnstable] Modrinth API returned empty versions array");
                     }
@@ -124,12 +130,16 @@ public class UpdateChecker {
                 plugin.getLogger().warning("[vUnstable] Update check timed out (Modrinth API)");
             } catch (Exception e) {
                 plugin.getLogger().warning("[vUnstable] Update check failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                future.completeExceptionally(e);
+                return;
             } finally {
                 checkInProgress = false;
             }
             
-            return false;
+            future.complete(false);
         });
+        
+        return future;
     }
     
     /**

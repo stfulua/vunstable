@@ -335,7 +335,7 @@ public class RodCommand implements TabExecutor {
         
         checker.forceCheck().thenAccept(updateAvailable -> {
             // Run on main thread for Bukkit API access
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            ((vUnstable) plugin).getSchedulerManager().runTask(() -> {
                 if (updateAvailable) {
                     String current = checker.getCurrentVersion();
                     String latest = checker.getLatestVersion();
@@ -372,7 +372,7 @@ public class RodCommand implements TabExecutor {
                 }
             });
         }).exceptionally(ex -> {
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            ((vUnstable) plugin).getSchedulerManager().runTask(() -> {
                 sendError(sender, "Update check failed: " + ex.getMessage());
             });
             return null;
@@ -399,7 +399,7 @@ public class RodCommand implements TabExecutor {
     }
     
     private void sendHelp(CommandSender sender) {
-        sender.sendMessage(Component.text("========== vUnstable v" + plugin.getDescription().getVersion() + " ==========")
+        sender.sendMessage(Component.text("========== vUnstable v" + plugin.getPluginMeta().getVersion() + " ==========")
             .color(NamedTextColor.GOLD)
             .decorate(TextDecoration.BOLD));
         sender.sendMessage(Component.text("/vu give <nuke|stab> [player]").color(NamedTextColor.YELLOW)
